@@ -97,15 +97,14 @@
        Behaviour:
        - Every click of Donate generates a fresh PartnerTransactionId
          and reloads the iFrame (one open = one donation attempt).
-       - The widget closes when the embed page's own close button is
-         clicked (the embed posts the string "cancel" via postMessage).
-         Backdrop click and Escape also close it. On close, the iFrame
-         is blanked so each Donate click starts a fresh session.
-       - frameScale in the config applies a visual zoom-out to the
-         embed content: 1 = actual size, 0.85 = 85%, etc. The iFrame
-         is rendered oversized and scaled down, so everything inside
-         (text, buttons, spacing) shrinks proportionally.
-       - Set showFallbackClose to true to show a floating × button.
+       - No widget chrome: the iFrame fills the panel. The widget
+         closes when the embed page's own close button is clicked
+         (the embed posts the string "cancel" via postMessage).
+         Backdrop click and Escape also close it.
+       - On close, the iFrame is blanked so each Donate click starts
+         a completely fresh session.
+       - If needed, set showFallbackClose to true below to show a
+         floating × button as a backup close control.
        ============================================================ -->
   <style>
     .gsg-widget-btn {
@@ -145,7 +144,7 @@
     .gsg-widget-panel {
       position: relative;
       width: 100%;
-      max-width: 760px;   /* panel width — adjust to taste */
+      max-width: 480px;
       height: min(720px, calc(100vh - 48px));
       background: #fff;
       border-radius: 12px;
@@ -173,19 +172,10 @@
     }
     .gsg-widget-close:hover { background: rgba(28, 43, 38, 0.8); }
 
-    /* Wrapper crops the oversized, scaled-down iFrame */
-    .gsg-widget-frame-wrap {
-      flex: 1 1 auto;
-      position: relative;
-      overflow: hidden;
-    }
     .gsg-widget-frame {
-      position: absolute;
-      top: 0;
-      left: 0;
+      flex: 1 1 auto;
+      width: 100%;
       border: none;
-      transform-origin: top left;
-      /* width, height and transform are set from frameScale in the script */
     }
 
     .gsg-widget-ref {
@@ -221,15 +211,13 @@
   <div class="gsg-widget-overlay" id="gsgWidgetOverlay" role="dialog" aria-modal="true" aria-label="Donate via Giving.sg">
     <div class="gsg-widget-panel">
       <button type="button" class="gsg-widget-close" id="gsgWidgetClose" aria-label="Close">&times;</button>
-      <div class="gsg-widget-frame-wrap">
-        <iframe
-          class="gsg-widget-frame"
-          id="gsgWidgetFrame"
-          title="Giving.sg campaign"
-          allow="payment"
-          referrerpolicy="strict-origin-when-cross-origin">
-        </iframe>
-      </div>
+      <iframe
+        class="gsg-widget-frame"
+        id="gsgWidgetFrame"
+        title="Giving.sg campaign"
+        allow="payment"
+        referrerpolicy="strict-origin-when-cross-origin">
+      </iframe>
       <div class="gsg-widget-ref" id="gsgWidgetRef">Ref: —</div>
     </div>
   </div>
@@ -239,7 +227,6 @@
     var GIVING_WIDGET_CONFIG = {
       baseUrl: "https://uat.giving.sg/NVPCGiving_sg/CampaignDetailExternal",
       campaignGuid: "294220c5-df61-4a76-9f0e-0facf5d52775",
-      frameScale: 0.85,          // visual zoom of embed content: 1 = 100%, 0.85 = 85%, etc.
       showFallbackClose: false   // set to true to show a floating × button
     };
     // PartnerTransactionId is auto-generated fresh on every Donate click.
@@ -251,13 +238,6 @@
       var closeBtn = document.getElementById("gsgWidgetClose");
       var frame = document.getElementById("gsgWidgetFrame");
       var refBar = document.getElementById("gsgWidgetRef");
-
-      // Apply the visual zoom-out: render the iFrame oversized, then
-      // scale it down so it fits the wrapper exactly.
-      var scale = GIVING_WIDGET_CONFIG.frameScale > 0 ? GIVING_WIDGET_CONFIG.frameScale : 1;
-      frame.style.width = (100 / scale) + "%";
-      frame.style.height = (100 / scale) + "%";
-      frame.style.transform = "scale(" + scale + ")";
 
       if (GIVING_WIDGET_CONFIG.showFallbackClose) {
         closeBtn.style.display = "block";
