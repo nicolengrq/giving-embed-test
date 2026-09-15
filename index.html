@@ -97,14 +97,14 @@
        Behaviour:
        - Every click of Donate generates a fresh PartnerTransactionId
          and reloads the iFrame (one open = one donation attempt).
-       - No widget chrome: the iFrame fills the panel and closing is
-         driven by the embed page's own close button via postMessage.
-         Every message received from the iFrame is logged to the
-         console, and the widget closes when a close-like event is
-         detected. Backdrop click and Escape also close it.
-       - If the embed's close button turns out not to signal the
-         parent page, set showFallbackClose to true below to get a
-         floating × button back.
+       - No widget chrome: the iFrame fills the panel. The widget
+         closes when the embed page's own close button is clicked
+         (the embed posts the string "cancel" via postMessage).
+         Backdrop click and Escape also close it.
+       - On close, the iFrame is blanked so each Donate click starts
+         a completely fresh session.
+       - If needed, set showFallbackClose to true below to show a
+         floating × button as a backup close control.
        ============================================================ -->
   <style>
     .gsg-widget-btn {
@@ -277,36 +277,19 @@
       function closeWidget() {
         overlay.classList.remove("gsg-open");
         document.body.style.overflow = "";
+        frame.src = "about:blank"; // fresh session starts on next Donate click
       }
 
       // ---- Close driven by the embed page's own close button ----
-      // The embed can only close this widget by posting a message to the
-      // parent window. Every message from the embed origin is logged so
-      // you can see exactly what the embed sends; the widget closes when
-      // the message looks like a close event.
-      function looksLikeClose(data) {
-        if (typeof data === "string") {
-          return data.toLowerCase().indexOf("close") !== -1;
-        }
-        if (data && typeof data === "object") {
-          var fields = ["type", "event", "action", "name", "message"];
-          for (var i = 0; i < fields.length; i++) {
-            var v = data[fields[i]];
-            if (typeof v === "string" && v.toLowerCase().indexOf("close") !== -1) {
-              return true;
-            }
-          }
-        }
-        return false;
-      }
-
+      // The embed posts the string "cancel" when its close button is clicked.
       window.addEventListener("message", function (e) {
         if (embedOrigin && e.origin !== embedOrigin) {
           return; // ignore messages from other origins (extensions, tools, etc.)
         }
         console.log("[Giving.sg widget] message from embed:", e.origin, e.data);
-        if (looksLikeClose(e.data)) {
+        if (e.data === "cancel") {
           closeWidget();
+          console.log("[Giving.sg widget] widget closed via embed cancel event");
         }
       });
 
