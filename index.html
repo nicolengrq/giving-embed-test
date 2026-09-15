@@ -91,11 +91,14 @@
 
   <!-- ============================================================
        GIVING.SG DONATION WIDGET — EMBED CODE START
-       This whole block (down to EMBED CODE END) is self-contained.
-       It can be copied into any partner page just before </body>.
+       This whole block (down to EMBED CODE END) is self-contained
+       and can be copied into any partner page just before </body>.
 
-       To configure, edit the two values in GIVING_WIDGET_CONFIG
-       below: the environment base URL and the campaign GUID.
+       Behaviour: every click of the Donate button generates a
+       brand-new PartnerTransactionId and reloads the iFrame, so
+       each open of the widget = one fresh donation attempt.
+
+       To configure, edit the two values in GIVING_WIDGET_CONFIG.
        ============================================================ -->
   <style>
     .gsg-widget-btn {
@@ -171,6 +174,19 @@
       border: none;
     }
 
+    .gsg-widget-ref {
+      flex: 0 0 auto;
+      padding: 6px 16px;
+      border-top: 1px solid #e6e3dc;
+      background: #faf9f6;
+      font-family: Consolas, Menlo, monospace;
+      font-size: 11px;
+      color: #8a948f;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     @media (max-width: 520px) {
       .gsg-widget-overlay { padding: 0; }
       .gsg-widget-panel {
@@ -201,15 +217,18 @@
         allow="payment"
         referrerpolicy="strict-origin-when-cross-origin">
       </iframe>
+      <div class="gsg-widget-ref" id="gsgWidgetRef">Ref: —</div>
     </div>
   </div>
 
   <script>
     // ---- CONFIGURE HERE -------------------------------------------------
     var GIVING_WIDGET_CONFIG = {
-      baseUrl: "https://uat.giving.sg",              // <-- replace with your actual UAT domain
-      campaignGuid: "294220c5-df61-4a76-9f0e-0facf5d52775"     // <-- replace with the campaignGuid to test
+      baseUrl: "https://uat.giving.sg/NVPCGiving_sg/CampaignDetailExternal",
+      campaignGuid: "294220c5-df61-4a76-9f0e-0facf5d52775"
     };
+    // PartnerTransactionId is NOT configured here — a fresh one is
+    // auto-generated every time the Donate button is clicked.
     // ---------------------------------------------------------------------
 
     (function () {
@@ -217,20 +236,31 @@
       var overlay = document.getElementById("gsgWidgetOverlay");
       var closeBtn = document.getElementById("gsgWidgetClose");
       var frame = document.getElementById("gsgWidgetFrame");
-      var loaded = false;
+      var refBar = document.getElementById("gsgWidgetRef");
 
-      function embedUrl() {
-        return GIVING_WIDGET_CONFIG.baseUrl.replace(/\/+$/, "")
-          + "/embed/campaign/"
-          + encodeURIComponent(GIVING_WIDGET_CONFIG.campaignGuid);
+      function newTransactionId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return window.crypto.randomUUID();
+        }
+        // Fallback UUID v4 for older browsers
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+          var r = (Math.random() * 16) | 0;
+          var v = c === "x" ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        });
+      }
+
+      function embedUrl(transactionId) {
+        return GIVING_WIDGET_CONFIG.baseUrl
+          + "?CampaignGuid=" + encodeURIComponent(GIVING_WIDGET_CONFIG.campaignGuid)
+          + "&PartnerTransactionId=" + encodeURIComponent(transactionId);
       }
 
       function openWidget() {
-        // Lazy-load: the iFrame only requests the embed URL on first open
-        if (!loaded) {
-          frame.src = embedUrl();
-          loaded = true;
-        }
+        var txnId = newTransactionId();
+        frame.src = embedUrl(txnId);
+        refBar.textContent = "Ref: " + txnId;
+        console.log("[Giving.sg widget] PartnerTransactionId:", txnId);
         overlay.classList.add("gsg-open");
         document.body.style.overflow = "hidden";
       }
