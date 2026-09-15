@@ -91,14 +91,20 @@
 
   <!-- ============================================================
        GIVING.SG DONATION WIDGET — EMBED CODE START
-       This whole block (down to EMBED CODE END) is self-contained
-       and can be copied into any partner page just before </body>.
+       Self-contained block; can be copied into any partner page
+       just before </body>.
 
-       Behaviour: every click of the Donate button generates a
-       brand-new PartnerTransactionId and reloads the iFrame, so
-       each open of the widget = one fresh donation attempt.
-
-       To configure, edit the two values in GIVING_WIDGET_CONFIG.
+       Behaviour:
+       - Every click of Donate generates a fresh PartnerTransactionId
+         and reloads the iFrame (one open = one donation attempt).
+       - No widget chrome: the iFrame fills the panel and closing is
+         driven by the embed page's own close button via postMessage.
+         Every message received from the iFrame is logged to the
+         console, and the widget closes when a close-like event is
+         detected. Backdrop click and Escape also close it.
+       - If the embed's close button turns out not to signal the
+         parent page, set showFallbackClose to true below to get a
+         floating × button back.
        ============================================================ -->
   <style>
     .gsg-widget-btn {
@@ -147,26 +153,24 @@
       flex-direction: column;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
     }
-    .gsg-widget-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      border-bottom: 1px solid #e6e3dc;
-      background: #fff;
-      flex: 0 0 auto;
-    }
-    .gsg-widget-header span { font-size: 14px; font-weight: 600; color: #1c2b26; }
+
     .gsg-widget-close {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 1;
+      width: 32px;
+      height: 32px;
       border: none;
-      background: none;
-      font-size: 22px;
+      border-radius: 50%;
+      background: rgba(28, 43, 38, 0.55);
+      color: #fff;
+      font-size: 20px;
       line-height: 1;
-      color: #6b756f;
       cursor: pointer;
-      padding: 4px 8px;
+      display: none; /* shown only when showFallbackClose is true */
     }
-    .gsg-widget-close:hover { color: #1c2b26; }
+    .gsg-widget-close:hover { background: rgba(28, 43, 38, 0.8); }
 
     .gsg-widget-frame {
       flex: 1 1 auto;
@@ -206,10 +210,7 @@
 
   <div class="gsg-widget-overlay" id="gsgWidgetOverlay" role="dialog" aria-modal="true" aria-label="Donate via Giving.sg">
     <div class="gsg-widget-panel">
-      <div class="gsg-widget-header">
-        <span>Donate via Giving.sg</span>
-        <button type="button" class="gsg-widget-close" id="gsgWidgetClose" aria-label="Close">&times;</button>
-      </div>
+      <button type="button" class="gsg-widget-close" id="gsgWidgetClose" aria-label="Close">&times;</button>
       <iframe
         class="gsg-widget-frame"
         id="gsgWidgetFrame"
@@ -225,10 +226,10 @@
     // ---- CONFIGURE HERE -------------------------------------------------
     var GIVING_WIDGET_CONFIG = {
       baseUrl: "https://uat.giving.sg/NVPCGiving_sg/CampaignDetailExternal",
-      campaignGuid: "294220c5-df61-4a76-9f0e-0facf5d52775"
+      campaignGuid: "294220c5-df61-4a76-9f0e-0facf5d52775",
+      showFallbackClose: false   // set to true to show a floating × button
     };
-    // PartnerTransactionId is NOT configured here — a fresh one is
-    // auto-generated every time the Donate button is clicked.
+    // PartnerTransactionId is auto-generated fresh on every Donate click.
     // ---------------------------------------------------------------------
 
     (function () {
@@ -238,11 +239,19 @@
       var frame = document.getElementById("gsgWidgetFrame");
       var refBar = document.getElementById("gsgWidgetRef");
 
+      if (GIVING_WIDGET_CONFIG.showFallbackClose) {
+        closeBtn.style.display = "block";
+      }
+
+      var embedOrigin = "";
+      try {
+        embedOrigin = new URL(GIVING_WIDGET_CONFIG.baseUrl).origin;
+      } catch (e) { /* leave empty; origin check will be skipped */ }
+
       function newTransactionId() {
         if (window.crypto && typeof window.crypto.randomUUID === "function") {
           return window.crypto.randomUUID();
         }
-        // Fallback UUID v4 for older browsers
         return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
           var r = (Math.random() * 16) | 0;
           var v = c === "x" ? r : (r & 0x3) | 0x8;
@@ -269,6 +278,37 @@
         overlay.classList.remove("gsg-open");
         document.body.style.overflow = "";
       }
+
+      // ---- Close driven by the embed page's own close button ----
+      // The embed can only close this widget by posting a message to the
+      // parent window. Every message from the embed origin is logged so
+      // you can see exactly what the embed sends; the widget closes when
+      // the message looks like a close event.
+      function looksLikeClose(data) {
+        if (typeof data === "string") {
+          return data.toLowerCase().indexOf("close") !== -1;
+        }
+        if (data && typeof data === "object") {
+          var fields = ["type", "event", "action", "name", "message"];
+          for (var i = 0; i < fields.length; i++) {
+            var v = data[fields[i]];
+            if (typeof v === "string" && v.toLowerCase().indexOf("close") !== -1) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      window.addEventListener("message", function (e) {
+        if (embedOrigin && e.origin !== embedOrigin) {
+          return; // ignore messages from other origins (extensions, tools, etc.)
+        }
+        console.log("[Giving.sg widget] message from embed:", e.origin, e.data);
+        if (looksLikeClose(e.data)) {
+          closeWidget();
+        }
+      });
 
       btn.addEventListener("click", openWidget);
       closeBtn.addEventListener("click", closeWidget);
